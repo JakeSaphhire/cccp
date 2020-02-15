@@ -50,11 +50,12 @@ static inline node* mknode_typed(const token* tkn, const node_type t){
 }
 
 static inline token** pop(token** stack){
+    token** ret_stack = stack;
     if(*stack == NULL || stack == NULL || (*stack)->next == NULL)
         return NULL;
     else
         (*stack) = (*stack)->next;
-    return stack;
+    return ret_stack;
 }
 
 static inline token** peek(token** first){
@@ -293,7 +294,7 @@ node* parse_direct_declarator_prime(token** first){
               else if (lookahead->type == IDENT)
                   root_node = addnode(root_node, parse_identifier_list(pop(first)));
           } else
-              break; // Adds nothing to the node, dir-dcl' is allowed to be an empty strinG
+              break; // Adds nothing to the node, dir-dcl' is allowed to be an empty strin 
           lookahead = *(peek(first));
       } while(IS_SPECIFER(lookahead->type) || lookahead->type == IDENT );
       return root_node;
@@ -305,15 +306,28 @@ node* parse_identifier_list(token** first){
 
     // We know from last step this is the correct parsing route
     // if the token *first points to is not an identifer, we are in
-    // prescence of a user-created grammatical mistake
-    root_node = addnode(root_node, mknode(expect_type(IDENT, first)));
-    for(; lookahead->strval[0] == ','; lookahead = *(peek(first)))
-        root_node = addnode(root_node, mknode(expect_type(pop(first))));
+    // presence of a user-created grammatical mistake
+    root_node = addnode(root_node, mknode(expect_type(IDENT, pop(first))));
+    while(lookahead->strval[0] == ',')
+        root_node = addnode(root_node, mknode(expect_type(IDENT, pop(first))));
     return root_node;
 }
 
 node* parse_parameter_list(token** first){
+    token* lookahead = *(peek(first));
+    node* root_node = mknode_typed(LIST);
+    do{
+        root_node = addnode(root_node, parse_parameter_decl(pop(first)));
+        lookahead = *first;
+    while(lookahead->strval[0] == ',');
+}
 
+node* parse_parameter_decl(token** first){
+    token* lookahead = *(peek(first));
+    node* root_node = mknode_typed(DECL);
     
-
-node* parse_constant_expression(token** first){
+    root_node = addnode(root_node, parse_specifiers(pop(first)));
+    root_node = addnode(root_node, parse_declarator(pop(first)));
+    return root_node;
+}
+node* parse_constant_expression(token** first){}
