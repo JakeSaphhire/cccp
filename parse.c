@@ -7,7 +7,7 @@
 #define DEF_NODE_ALLOC 3
 
 #define IS_SPECIFER(c) (c >= 6 && c <= 8)
-typedef enum e_node_type { GBL_DEF, FUNC_DEF, DECL, STAT, NOP, LIST, SPECS } node_type;
+typedef enum e_node_type { GBL_DEF, FUNC_DEF, DECL, STAT, NOP, LIST, SPECS, ERR } node_type;
 
 typedef struct parser_state_s {
     enum e_state { ERROR, FAILED, ABORTED, SUCCESS } state;
@@ -95,7 +95,7 @@ token* expect_type(int tkn_type, token** first ){
         printf(" at character %d of line %d\n", (*current_token)->xpos, (current_token)->ypos );
         // OPTIONAL !! TO DEBUG !! : Creates a fictional token that corresponds to what is expected
         //                           in order to continue compilation
-        token* return_token = addtoken(NULL, NULL, NULL, tkn_type, parser.uidcounter++, NULL, NULL );
+        token* return_token = addtoken(NULL, NULL, NULL, ERR, parser.uidcounter++, NULL, NULL );
         return_token->next = current_token->next;
         return return_token;
     } else
@@ -108,7 +108,7 @@ token* expect_char(char c, token** first){
         parser.state = ERROR;
         // See expect_type function for explanation
         printf("ERROR : Expected %c at character %d on line %d", c, current_token->xpos, current_token->ypos);
-        token* return_token = addtoken(to_str(c), NULL, NULL, OPER, parser.uidcounter++, NULL, NULL);
+        token* return_token = addtoken(to_str(c), NULL, NULL, ERR, parser.uidcounter++, NULL, NULL);
         return_token->next = current_token->next;
         return return_token;
     } else 
@@ -251,12 +251,14 @@ node* parse_specifiers(token** first){
     return root_node;
 }
 
+
+// decl ::= ( '*' | type-qualifier ) <direct-dcl>
 node* parse_declarator(token** first){
     token* next_token = *(first);
     token* lookahead = *(peek(first));
     node* root_node = mknode_typed(NULL, DCL);
     
-    if(strcmp((next_token->strval), "*") == 0 || (next_token)->type == ){
+    if(strcmp((next_token->strval), "*") == 0 || (next_token)->type == TQUAL){
         root_node = addnode(root_node, mknode(next_token));
         while(strcmp((lookahead->strval), "*") == 0 || (lookahead)->type == TQUAL ){
             pop(first);
@@ -264,22 +266,25 @@ node* parse_declarator(token** first){
             lookahead = *(peek(first));
         }
     }
-    root_node = addnode(root_node, parse_direct_declarator(first));
+    root_node = addnode(root_node, parse_direct_declarator(lookahead));
     return root_node;
 }
 
+// direct-dcl ::=  ( '(' <dcl> ')' | identifier ) <direct-dcl'>
 node* parse_direct_declarator(token** first){
     token* lookahead = *(peek(first));
     node* root_node = mknode_typed(NULL, DIR_DCL);
 
-    if(strcmp((*first)->strval, "(") == 0)
+    if(strcmp((*first)->strval, "(") == 0){
         root_node = addnode(root_node, parse_declarator(pop(first)));
-    else if( (*first)->type == IDENT )
+        expect_char(')', pop(first));
+    } else if( (*first)->type == IDENT )
         root_node = addnode(root_node, mknode(*first));
     root_node = addnode(root_node, parse_direct_declarator_prime(pop(first)));
     return root_node;
 }
 
+// direct-dcl' ::= '[' <constant-expression> ']' | '(' <parameter-list> ')' | '(' <identifier-list> ')' | e
 node* parse_direct_declarator_prime(token** first){
       token* lookahead = *(peek(first));
       node* root_node = mknode_typed(DIR_DCL, NULL);
@@ -288,17 +293,20 @@ node* parse_direct_declarator_prime(token** first){
           if(strcmp((*first)->strval, "[") == 0)
               root_node = addnode(root_node, parse_constant_expression(pop(first)));
           else if (strcmp((*first)->strval, "(") == 0){
+              // Predictive Parsing in Action!
+              // Following line checks for a production rule of a non-terminal 3 levels deeper
               if (lookahead->type == DTYPE || lookahead->type == TQUAL || lookahead->type == STORAGE_CLASS)
                       root_node = addnode(root_node, parse_parameter_list(pop(first)));
               else if (lookahead->type == IDENT)
                   root_node = addnode(root_node, parse_identifier_list(pop(first)));
           } else
-              break; // Adds nothing to the node, dir-dcl' is allowed to be an empty strinG
+              break; // Adds nothing to the node, dir-dcl' is allowed to be an empty string
           lookahead = *(peek(first));
       } while(IS_SPECIFER(lookahead->type) || lookahead->type == IDENT );
       return root_node;
 }
 
+// identifier-list ::= identifier { identifier }
 node* parse_identifier_list(token** first){
     token* lookahead = *(peek(first));
     node* root_node = mknode_typed(LIST);
@@ -312,8 +320,7 @@ node* parse_identifier_list(token** first){
     return root_node;
 }
 
+// parameter-list ::= 
 node* parse_parameter_list(token** first){
-
-    
 
 node* parse_constant_expression(token** first){
